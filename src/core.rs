@@ -1,14 +1,20 @@
-use nix::sched::{unshare, CloneFlags};
-use nix::unistd::sethostname;
+use nix::{
+    mount::{mount, umount, MsFlags},
+    sched::{unshare, CloneFlags},
+    unistd::{chdir, chroot, sethostname},
+};
 use std::process::{exit, Command};
 
 pub fn run(args: &Vec<String>) {
     println!("process id of parent:- {}", std::process::id());
 
-    if let Err(err) = unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID) {
-        eprintln!("Failed to create UTS namespace: {}", err);
+    if let Err(err) =
+        unshare(CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWNS)
+    {
+        eprintln!("Failed to create namespaces: {}", err);
         exit(1);
     }
+
     if let Err(err) = sethostname("container") {
         eprintln!("Failed to set hostname: {}", err);
         exit(1);
@@ -27,10 +33,39 @@ pub fn child(args: &Vec<String>) {
     println!("running {:?}", &args[2..]);
     println!("process id in child:- {}", std::process::id());
 
+    let path = std::env::current_dir().unwrap();
+    let abs_path = format!("{}/{}", path.display(), "rootfs");
+
+    if let Err(err) = chroot(abs_path.as_str()) {
+        eprintln!("Failed to chroot: {}", err);
+        exit(1);
+    }
+
+    if let Err(err) = chdir("/") {
+        eprintln!("Failed to change root directory: {}", err);
+        exit(1);
+    }
+
+    if let Err(err) = mount(
+        Some("proc"),
+        "/proc",
+        Some("proc"),
+        MsFlags::empty(),
+        None::<&str>,
+    ) {
+        eprintln!("Failed to mount proc filesystem: {}", err);
+        exit(1);
+    }
+
     let _output = Command::new(&args[2])
         .args(&args[3..])
         .spawn()
         .expect("failed to execute process")
         .wait()
         .expect("failed to wait on process");
+
+    if let Err(err) = umount("/proc") {
+        eprintln!("Failed to unmount proc filesystem: {}", err);
+        exit(1);
+    }
 }
