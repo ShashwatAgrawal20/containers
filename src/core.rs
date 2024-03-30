@@ -40,10 +40,24 @@ pub fn run(args: &Vec<String>) {
 
     let pid = std::process::id();
 
+    if let Ok(mut setgroups) = File::create(format!("/proc/{}/{}", pid, "setgroups")) {
+        if let Err(err) = setgroups.write_all(b"deny") {
+            eprintln!("Failed to write setgroups: {}", err);
+        }
+        if let Err(err) = setgroups.flush() {
+            eprintln!("Failed to flush setgroups: {}", err);
+        }
+    } else {
+        eprintln!("Failed to create setgroups");
+        exit(1);
+    }
+
     if let Ok(mut uid_map) = File::create(format!("/proc/{}/{}", pid, "uid_map")) {
         if let Err(err) = uid_map.write_all(format!("0 {} 1", uid.as_raw()).as_bytes()) {
-            eprintln!("Failed to write uid_map {}", err);
-            exit(1);
+            eprintln!("Failed to write uid_map: {}", err);
+        }
+        if let Err(err) = uid_map.flush() {
+            eprintln!("Failed to flush uid_map: {}", err);
         }
     } else {
         eprintln!("Failed to create uid_map");
@@ -51,15 +65,18 @@ pub fn run(args: &Vec<String>) {
     }
 
     // TODO: fix this shitty erroneous code
-    // if let Ok(mut gid_map) = File::create(format!("/proc/{}/{}", pid, "gid_map")) {
-    //     if let Err(err) = gid_map.write_all(format!("0 {} 1", gid.as_raw()).as_bytes()) {
-    //         eprintln!("Failed to write gid_map {}", err);
-    //         exit(1);
-    //     }
-    // } else {
-    //     eprintln!("Failed to create gid_map");
-    //     exit(1);
-    // }
+    if let Ok(mut gid_map) = File::create(format!("/proc/{}/{}", pid, "gid_map")) {
+        if let Err(err) = gid_map.write_all(format!("0 {} 1", gid.as_raw()).as_bytes()) {
+            eprintln!("Failed to write gid_map: {}", err);
+            exit(1);
+        }
+        if let Err(err) = gid_map.flush() {
+            eprintln!("Failed to flush gid_map: {}", err);
+        }
+    } else {
+        eprintln!("Failed to create gid_map");
+        exit(1);
+    }
 
     // The `/proc/self/exe` is a symbolic link to the current process's executable.
     let _output = Command::new("/proc/self/exe")
