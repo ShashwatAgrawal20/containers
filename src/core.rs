@@ -3,15 +3,11 @@ use nix::{
     sched::{unshare, CloneFlags},
     unistd::{chdir, chroot, sethostname},
 };
-#[allow(unused_imports)]
 use std::{
-    fs::{create_dir_all, remove_dir},
-    path::PathBuf,
+    fs::File,
+    io::Write,
     process::{exit, Command},
 };
-
-use std::fs::File;
-use std::io::Write;
 
 pub fn run(args: &Vec<String>) {
     println!("process id of parent:- {}", std::process::id());
